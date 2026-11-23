@@ -23,6 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -33,20 +37,47 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Do not request the obsolete Android SDK "tools" package.
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK 36 components
+      # Use the Android SDK already installed on the GitHub-hosted runner.
+      # Use the runner-provided SDK to avoid obsolete package installation.
+      - name: Locate Android SDK manager
+        id: sdk
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager --install \
+
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "${ANDROID_HOME}/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
+          fi
+
+          if [[ -z "${SDKMANAGER:-}" || ! -x "$SDKMANAGER" ]]; then
+            echo "::error::sdkmanager was not found in ${ANDROID_HOME}/cmdline-tools."
+            find "${ANDROID_HOME}" -maxdepth 5 -type f -name sdkmanager -print || true
+            exit 1
+          fi
+
+          echo "sdkmanager=$SDKMANAGER" >> "$GITHUB_OUTPUT"
+          echo "Using $SDKMANAGER"
+          "$SDKMANAGER" --version
+
+      - name: Accept licences and install Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${{ steps.sdk.outputs.sdkmanager }}"
+
+          # Disable pipefail only for this pipeline: sdkmanager's exit code
+          # remains the pipeline status, while 'yes' may exit early on SIGPIPE.
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses
+          set -o pipefail
+
+          "$SDKMANAGER" --install \
             "platform-tools" \
             "platforms;android-36" \
             "build-tools;36.0.0"
 
-      - name: Extract the exact project archive
+      - name: Extract AIRWAVE project archive
         shell: bash
         run: |
           set -euo pipefail
@@ -59,28 +90,30 @@ jobs:
             exit 1
           fi
 
-          unzip -oq "$ARCHIVE" -d "$RUNNER_TEMP/radio-cherry-source"
+          EXTRACT_DIR="$RUNNER_TEMP/radio-cherry-source"
+          mkdir -p "$EXTRACT_DIR"
+          unzip -oq "$ARCHIVE" -d "$EXTRACT_DIR"
 
-          PROJECT_DIR="$RUNNER_TEMP/radio-cherry-source/EnglishRadioTest"
-          if [[ ! -f "$PROJECT_DIR/settings.gradle.kts" || \
-                ! -f "$PROJECT_DIR/build.gradle.kts" || \
-                ! -f "$PROJECT_DIR/app/build.gradle.kts" || \
-                ! -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml" ]]; then
-            echo "::error::The archive does not contain the expected EnglishRadioTest Android project structure."
-            find "$RUNNER_TEMP/radio-cherry-source" -maxdepth 4 -type f | sort
-            exit 1
-          fi
+          PROJECT_DIR="$EXTRACT_DIR/EnglishRadioTest"
+          for file in settings.gradle.kts build.gradle.kts app/build.gradle.kts app/src/main/AndroidManifest.xml; do
+            if [[ ! -f "$PROJECT_DIR/$file" ]]; then
+              echo "::error::Expected project file is missing: $PROJECT_DIR/$file"
+              echo "Archive contents:"
+              find "$EXTRACT_DIR" -maxdepth 5 -type f | sort
+              exit 1
+            fi
+          done
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Extracted project: $PROJECT_DIR"
+          echo "Project extracted successfully: $PROJECT_DIR"
 
-      - name: Set launcher display name to radio cherry
+      - name: Set app display name to radio cherry
         shell: bash
         run: |
           set -euo pipefail
           STRINGS_FILE="$PROJECT_DIR/app/src/main/res/values/strings.xml"
           if [[ ! -f "$STRINGS_FILE" ]]; then
-            echo "::error::Missing app strings file: $STRINGS_FILE"
+            echo "::error::Missing strings.xml: $STRINGS_FILE"
             exit 1
           fi
 
@@ -90,13 +123,13 @@ jobs:
           import sys
 
           path = pathlib.Path(sys.argv[1])
-          content = path.read_text(encoding="utf-8")
+          source = path.read_text(encoding="utf-8")
           pattern = r'(<string\s+name="app_name"\s*>).*?(</string>)'
-          updated, count = re.subn(pattern, r'\1radio cherry\2', content, count=1, flags=re.S)
+          updated, count = re.subn(pattern, r'\1radio cherry\2', source, count=1, flags=re.S)
           if count != 1:
-              raise SystemExit("Could not find exactly one app_name string in strings.xml")
+              raise SystemExit('Could not find the app_name string in strings.xml')
           path.write_text(updated, encoding="utf-8")
-          print("Launcher label set to: radio cherry")
+          print('App display name set to: radio cherry')
           PY
 
       - name: Verify Android build configuration
@@ -104,14 +137,12 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           set -euo pipefail
-
-          grep -Eq 'compileSdk\s*=\s*36' app/build.gradle.kts
-          grep -Eq 'targetSdk\s*=\s*36' app/build.gradle.kts
-          grep -Eq 'id\("com.android.application"\) version "8\.13\.2"' build.gradle.kts
-          grep -Eq 'id\("org.jetbrains.kotlin.android"\) version "2\.2\.21"' build.gradle.kts
-
-          echo "Verified: compileSdk 36, targetSdk 36, AGP 8.13.2, Kotlin 2.2.21."
+          grep -Eq 'compileSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
+          grep -Eq 'targetSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
+          grep -Fq 'id("com.android.application") version "8.13.2" apply false' build.gradle.kts
+          grep -Fq 'id("org.jetbrains.kotlin.android") version "2.2.21" apply false' build.gradle.kts
           grep -n 'app_name' app/src/main/res/values/strings.xml
+          echo "Build configuration verified."
 
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
@@ -125,7 +156,7 @@ jobs:
           set -euo pipefail
           gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Verify APK
+      - name: Verify APK output
         id: apk
         shell: bash
         working-directory: ${{ env.PROJECT_DIR }}
@@ -133,16 +164,16 @@ jobs:
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
           if [[ ! -s "$APK" ]]; then
-            echo "::error::Build completed without producing ${APK}."
+            echo "::error::APK was not generated at $APK"
             exit 1
           fi
-          echo "APK_PATH=$PROJECT_DIR/$APK" >> "$GITHUB_ENV"
+          echo "apk_path=$PROJECT_DIR/$APK" >> "$GITHUB_OUTPUT"
           ls -lh "$APK"
 
       - name: Upload radio cherry APK
         uses: actions/upload-artifact@v4
         with:
           name: radio-cherry-debug-apk
-          path: ${{ env.APK_PATH }}
+          path: ${{ steps.apk.outputs.apk_path }}
           if-no-files-found: error
           retention-days: 14
