@@ -148,6 +148,11 @@ jobs:
           grep -Fq 'PageHero("radio cherry"' app/src/main/java/com/example/englishradio/MainActivity.kt
           test "$(grep -Fc 'SectionHeading("Genres"' app/src/main/java/com/example/englishradio/MainActivity.kt)" -eq 1
           test "$(grep -Fc 'GenreGrid(genres, activeGenre, onGenre, palette)' app/src/main/java/com/example/englishradio/MainActivity.kt)" -eq 1
+          grep -Fq 'class TvActivity' app/src/main/java/com/example/englishradio/TvActivity.kt
+          grep -Fq 'android.intent.category.LEANBACK_LAUNCHER' app/src/main/AndroidManifest.xml
+          grep -Fq 'android:name="android.software.leanback" android:required="false"' app/src/main/AndroidManifest.xml
+          grep -Fq 'android:banner="@drawable/tv_banner"' app/src/main/AndroidManifest.xml
+          grep -Fq 'TvPage.BROWSE' app/src/main/java/com/example/englishradio/TvActivity.kt
           grep -Fq 'Visualizer(sessionId)' app/src/main/java/com/example/englishradio/MainActivity.kt
           grep -Fq 'onWaveFormDataCapture' app/src/main/java/com/example/englishradio/MainActivity.kt
           grep -Fq 'waveform: FloatArray, level: Float' app/src/main/java/com/example/englishradio/MainActivity.kt
