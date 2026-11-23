@@ -123,6 +123,8 @@ jobs:
             "app/src/main/AndroidManifest.xml"
             "app/src/main/res/values/strings.xml"
             "app/src/main/java/com/example/englishradio/MainActivity.kt"
+            "app/src/main/java/com/example/englishradio/TvActivity.kt"
+            "app/src/main/res/drawable-nodpi/tv_banner.png"
             "app/src/main/java/com/example/englishradio/PlaybackService.kt"
             "app/src/main/java/com/example/englishradio/ImportedStations.kt"
             "app/src/main/java/com/example/englishradio/PlaylistResolver.kt"
@@ -139,6 +141,7 @@ jobs:
           grep -Fq 'versionCode = 16' "$PROJECT_DIR/app/build.gradle.kts"
           grep -Fq 'versionName = "3.1.5"' "$PROJECT_DIR/app/build.gradle.kts"
           grep -Fq '<string name="app_name">radio cherry</string>' "$PROJECT_DIR/app/src/main/res/values/strings.xml"
+          grep -Fq 'android.intent.category.LEANBACK_LAUNCHER' "$PROJECT_DIR/app/src/main/AndroidManifest.xml"
 
           echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
           echo "Validated project: $PROJECT_DIR"
