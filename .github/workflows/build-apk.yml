@@ -7,7 +7,7 @@ on:
       - main
       - master
     paths:
-      - 'RadioCherry_3.1.1_AMOLED_Controls.zip'
+      - 'RadioCherry_3.1.2_Waveform_Refinement.zip'
       - '.github/workflows/build-apk.yml'
 
 permissions:
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build radio cherry 3.1.1
+    name: Build radio cherry 3.1.2
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ARCHIVE="RadioCherry_3.1.1_AMOLED_Controls.zip"
+          ARCHIVE="RadioCherry_3.1.2_Waveform_Refinement.zip"
           if [[ ! -s "$ARCHIVE" ]]; then
             echo "::error::Required source archive is missing: $ARCHIVE"
             echo "No fallback archive is permitted. Commit the exact file to the repository root."
@@ -126,8 +126,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'versionCode = 13' app/build.gradle.kts
-          grep -Fq 'versionName = "3.1.1"' app/build.gradle.kts
+          grep -Fq 'versionCode = 14' app/build.gradle.kts
+          grep -Fq 'versionName = "3.1.2"' app/build.gradle.kts
           grep -Fq '<string name="app_name">radio cherry</string>' app/src/main/res/values/strings.xml
           grep -Fq 'RadioTab.NOW_PLAYING' app/src/main/java/com/example/englishradio/MainActivity.kt
           grep -Fq 'RadioTab.BROWSE' app/src/main/java/com/example/englishradio/MainActivity.kt
@@ -145,6 +145,12 @@ jobs:
             exit 1
           fi
           grep -Fq 'private fun PageHero' app/src/main/java/com/example/englishradio/MainActivity.kt
+          grep -Fq 'PageHero("radio cherry"' app/src/main/java/com/example/englishradio/MainActivity.kt
+          grep -Fq 'contourCount = 13' app/src/main/java/com/example/englishradio/MainActivity.kt
+          grep -Fq 'glowSpecs' app/src/main/java/com/example/englishradio/MainActivity.kt
+          grep -Fq '0xFF17D9D0' app/src/main/java/com/example/englishradio/MainActivity.kt
+          grep -Fq '0xFF398CFB' app/src/main/java/com/example/englishradio/MainActivity.kt
+          grep -Fq '0xFF9E49F0' app/src/main/java/com/example/englishradio/MainActivity.kt
           grep -Fq 'private fun RadioBottomNavigation' app/src/main/java/com/example/englishradio/MainActivity.kt
           grep -Eq 'compileSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
           grep -Eq 'targetSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
@@ -202,7 +208,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## radio cherry 3.1.1"
+            echo "## radio cherry 3.1.2"
             echo
             echo "Source archive: ${{ steps.source.outputs.archive }}"
             echo "Source SHA-256: ${{ steps.source.outputs.sha256 }}"
