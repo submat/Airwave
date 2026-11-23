@@ -1,4 +1,4 @@
-# AIRWAVE — English Radio Test App
+# Radio Cherry — New Radio App
 
 A native Android/Kotlin + Jetpack Compose internet radio prototype using AndroidX Media3 ExoPlayer.
 
