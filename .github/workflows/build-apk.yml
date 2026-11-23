@@ -7,7 +7,7 @@ on:
       - main
       - master
     paths:
-      - 'RadioCherry_3.1.2_Waveform_Refinement.zip'
+      - 'RadioCherry_3.1.4_AudioVisualizer_AMOLED.zip'
       - '.github/workflows/build-apk.yml'
 
 permissions:
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build radio cherry 3.1.2
+    name: Build radio cherry 3.1.4
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ARCHIVE="RadioCherry_3.1.2_Waveform_Refinement.zip"
+          ARCHIVE="RadioCherry_3.1.4_AudioVisualizer_AMOLED.zip"
           if [[ ! -s "$ARCHIVE" ]]; then
             echo "::error::Required source archive is missing: $ARCHIVE"
             echo "No fallback archive is permitted. Commit the exact file to the repository root."
@@ -121,13 +121,13 @@ jobs:
           echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
           echo "Extracted project: $PROJECT_DIR"
 
-      - name: Verify Radio Cherry 3.1.0 UI and Android configuration
+      - name: Verify Radio Cherry 3.1.4 UI and Android configuration
         working-directory: ${{ steps.project.outputs.project_dir }}
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'versionCode = 14' app/build.gradle.kts
-          grep -Fq 'versionName = "3.1.2"' app/build.gradle.kts
+          grep -Fq 'versionCode = 15' app/build.gradle.kts
+          grep -Fq 'versionName = "3.1.4"' app/build.gradle.kts
           grep -Fq '<string name="app_name">radio cherry</string>' app/src/main/res/values/strings.xml
           grep -Fq 'RadioTab.NOW_PLAYING' app/src/main/java/com/example/englishradio/MainActivity.kt
           grep -Fq 'RadioTab.BROWSE' app/src/main/java/com/example/englishradio/MainActivity.kt
@@ -146,6 +146,13 @@ jobs:
           fi
           grep -Fq 'private fun PageHero' app/src/main/java/com/example/englishradio/MainActivity.kt
           grep -Fq 'PageHero("radio cherry"' app/src/main/java/com/example/englishradio/MainActivity.kt
+          grep -Fq 'waveform: FloatArray, level: Float' app/src/main/java/com/example/englishradio/MainActivity.kt
+          grep -Fq 'val sampleIndex = (t * (waveform.size - 1))' app/src/main/java/com/example/englishradio/MainActivity.kt
+          grep -Fq 'android.os.Handler(android.os.Looper.getMainLooper()).post' app/src/main/java/com/example/englishradio/MainActivity.kt
+          if grep -Fq 'Text("Radio Cherry"' app/src/main/java/com/example/englishradio/MainActivity.kt; then
+            echo '::error::Duplicate Radio Cherry empty-state title remains below the hero.'
+            exit 1
+          fi
           grep -Fq 'contourCount = 13' app/src/main/java/com/example/englishradio/MainActivity.kt
           grep -Fq 'glowSpecs' app/src/main/java/com/example/englishradio/MainActivity.kt
           grep -Fq '0xFF17D9D0' app/src/main/java/com/example/englishradio/MainActivity.kt
@@ -158,7 +165,7 @@ jobs:
           grep -Fq 'id("org.jetbrains.kotlin.android") version "2.2.21" apply false' build.gradle.kts
           grep -Fq 'id("org.jetbrains.kotlin.plugin.compose") version "2.2.21" apply false' build.gradle.kts
           grep -Fq 'jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17' app/build.gradle.kts
-          echo "Source identity, three-screen UI, light/dark theme, SDK and compiler versions verified."
+          echo "Source identity, audio-reactive waveform, three-screen UI, light/dark theme, SDK and compiler versions verified."
 
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
@@ -208,7 +215,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## radio cherry 3.1.2"
+            echo "## radio cherry 3.1.4"
             echo
             echo "Source archive: ${{ steps.source.outputs.archive }}"
             echo "Source SHA-256: ${{ steps.source.outputs.sha256 }}"
