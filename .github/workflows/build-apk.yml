@@ -1,4 +1,4 @@
-name: radio cherry Android APK
+name: Radio Cherry Android APK
 
 on:
   workflow_dispatch:
@@ -27,7 +27,11 @@ jobs:
   build:
     name: Build Radio Cherry debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout repository
@@ -39,24 +43,49 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Do not request the obsolete SDK package named "tools".
-      - name: Set up Android command-line tools
-        uses: android-actions/setup-android@v3
-
-      - name: Accept Android SDK licences and install required SDK packages
+      - name: Locate preinstalled Android SDK tools
+        id: android
         shell: bash
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager --install \
+
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "${ANDROID_HOME}/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1)"
+          fi
+
+          if [[ -z "${SDKMANAGER:-}" || ! -x "$SDKMANAGER" ]]; then
+            echo "::error::Could not locate sdkmanager under ${ANDROID_HOME}/cmdline-tools"
+            find "${ANDROID_HOME}/cmdline-tools" -maxdepth 3 -type f -name sdkmanager -print || true
+            exit 1
+          fi
+
+          echo "sdkmanager=${SDKMANAGER}" >> "$GITHUB_OUTPUT"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          echo "${ANDROID_HOME}/platform-tools" >> "$GITHUB_PATH"
+          echo "Using Android SDK manager: ${SDKMANAGER}"
+          "${SDKMANAGER}" --version
+
+      - name: Accept Android SDK licences and install project SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SDKMANAGER="${{ steps.android.outputs.sdkmanager }}"
+
+          # Accept licences before installing SDK components.
+          # Disable pipefail for this pipeline because `yes` can receive SIGPIPE
+          # after sdkmanager has accepted the required responses.
+          set +o pipefail
+          yes | "${SDKMANAGER}" --licenses
+          set -o pipefail
+
+          # The checked-in Radio Cherry project declares compileSdk = 36
+          # and targetSdk = 36 in EnglishRadioTest/app/build.gradle.kts.
+          "${SDKMANAGER}" --install \
             "platform-tools" \
             "platforms;android-36" \
             "build-tools;36.0.0"
-
-      - name: Set up Gradle 8.13
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.13'
 
       - name: Locate or extract Radio Cherry project
         id: project
@@ -70,15 +99,18 @@ jobs:
             PROJECT_DIR="EnglishRadioTest"
           elif [[ -f "radio-cherry_GitHub_Build.zip" ]]; then
             unzip -oq "radio-cherry_GitHub_Build.zip"
-            if [[ -f "EnglishRadioTest/app/build.gradle.kts" ]]; then
+
+            if [[ -f "app/build.gradle.kts" ]]; then
+              PROJECT_DIR="."
+            elif [[ -f "EnglishRadioTest/app/build.gradle.kts" ]]; then
               PROJECT_DIR="EnglishRadioTest"
             else
-              echo "::error::The ZIP does not contain EnglishRadioTest/app/build.gradle.kts"
+              echo "::error::The ZIP does not contain app/build.gradle.kts or EnglishRadioTest/app/build.gradle.kts"
               exit 1
             fi
           else
-            echo "::error::Could not find app/build.gradle.kts or radio-cherry_GitHub_Build.zip"
-            echo "Upload the project files to the repository, or place radio-cherry_GitHub_Build.zip in the repository root."
+            echo "::error::Android project not found."
+            echo "Expected the project in the repository root, EnglishRadioTest/, or radio-cherry_GitHub_Build.zip in the repository root."
             exit 1
           fi
 
@@ -90,13 +122,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f settings.gradle.kts
-          test -f build.gradle.kts
-          test -f app/build.gradle.kts
-          grep -q 'compileSdk = 36' app/build.gradle.kts
-          echo "Project structure and compileSdk configuration verified."
 
-      - name: Build debug APK
+          for file in settings.gradle.kts build.gradle.kts app/build.gradle.kts app/src/main/AndroidManifest.xml; do
+            if [[ ! -f "$file" ]]; then
+              echo "::error::Required project file is missing: $file"
+              exit 1
+            fi
+          done
+
+          grep -Eq 'compileSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts || {
+            echo "::error::This workflow installs Android SDK 36, but app/build.gradle.kts does not declare compileSdk = 36."
+            exit 1
+          }
+
+          echo "Project files verified; compileSdk 36 confirmed."
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Build Radio Cherry debug APK
         working-directory: ${{ steps.project.outputs.project_dir }}
         shell: bash
         run: |
@@ -109,11 +155,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           APK="app/build/outputs/apk/debug/app-debug.apk"
           if [[ ! -s "$APK" ]]; then
             echo "::error::APK was not generated at ${APK}"
             exit 1
           fi
+
           echo "path=${{ steps.project.outputs.project_dir }}/${APK}" >> "$GITHUB_OUTPUT"
           ls -lh "$APK"
 
