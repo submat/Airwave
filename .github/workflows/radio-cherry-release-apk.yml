@@ -6,9 +6,7 @@
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           set -euo pipefail
-
           KEYSTORE_PATH="$RUNNER_TEMP/radio-cherry-release.p12"
-
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
 
@@ -18,14 +16,12 @@
           fi
 
           echo "Checking PKCS12 keystore..."
-          keytool -list \
-            -storetype PKCS12 \
+          keytool -list -storetype PKCS12 \
             -keystore "$KEYSTORE_PATH" \
             -storepass:env KEYSTORE_PASSWORD
 
           echo "Checking signing alias..."
-          keytool -list \
-            -storetype PKCS12 \
+          keytool -list -storetype PKCS12 \
             -keystore "$KEYSTORE_PATH" \
             -storepass:env KEYSTORE_PASSWORD \
             -alias "$KEY_ALIAS"
